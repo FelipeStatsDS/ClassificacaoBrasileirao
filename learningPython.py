@@ -215,3 +215,5 @@ classificacao.columns = [
     "vit", "emp","der",
     "gm","gc","sg"
 ]
+
+print(classificacao)
