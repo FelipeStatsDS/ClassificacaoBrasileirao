@@ -7,8 +7,8 @@ dados
 # OBJETIVO: separar a coluna score
 
 #filtrando a base para o ano de 2023
-temporada = 2023
-dados_temporada = dados.query("season == @temporada")
+# temporada = 2023
+dados_temporada = dados.query("season < 2024")
 
 # criando uma função que separa strings
 def pegar_gols_mandante(placar):
@@ -36,6 +36,7 @@ def verificar_vitoria_visitante(placar):
     else: 
         return 0
 
+
 def calcular_pontos_mandante(placar):
     if verificar_vitoria_mandante(placar) == 2:
         return 3
@@ -52,7 +53,6 @@ def calcular_pontos_visitante(placar):
         return 3
     else: 
         return 1     
-
 
 
 # agora aplicaremos as função criando colunas de gols
@@ -74,14 +74,16 @@ dados_temporada[["gols_mandante", "gols_visitante"]] = dados_temporada[["gols_ma
 # Criando uma tabela com dados de times mandantes
 tab_mandante = (
     dados_temporada
-    .filter(items=["home", 
+    .filter(items=["home",
+    "season", 
     "pontos_mandante", 
     "vitoria_mandante", 
     "gols_mandante",
     "gols_visitante"]
     )
     .rename(columns={
-        "home": "time", 
+        "home": "time",
+        "season": "temporada",
         "pontos_mandante": "pontos", 
         "vitoria_mandante": "vitorias", 
         "gols_mandante": "gols_marcados",
@@ -93,12 +95,14 @@ tab_mandante = (
 tab_visitante = (
     dados_temporada
     .filter(items=["away",
+    "season",
     "pontos_visitante", 
     "vitoria_visitante", 
     "gols_visitante",
     "gols_mandante"]
     )
-    .rename(columns={"away": "time", 
+    .rename(columns={"away": "time",
+    "season": "temporada", 
     "pontos_visitante": "pontos", 
     "vitoria_visitante": "vitorias", 
     "gols_visitante": "gols_marcados",
@@ -109,19 +113,19 @@ tab_visitante = (
 #criando as tabelas de gols sofridos por mando
 tab_gols_sofridos_mandante = (
     tab_mandante
-    .groupby("time")["gols_sofridos"]
+    .groupby(["temporada", "time"])["gols_sofridos"]
     .agg("sum")
-    .sort_values(ascending=False)
     .reset_index()
+    .sort_values(by = "temporada", ascending=False)
 )
 
 
 tab_gols_sofridos_visitante = (
     tab_visitante
-    .groupby("time")["gols_sofridos"]
+    .groupby(["temporada", "time"])["gols_sofridos"]
     .agg("sum")
-    .sort_values(ascending=False)
     .reset_index()
+    .sort_values(by = "temporada", ascending=False)
 )
 
 # concatenando as tabelas
@@ -130,90 +134,110 @@ tab_concat = pd.concat([tab_mandante, tab_visitante])
 #Criando a tabela de gols sofridos total
 tab_gols_sofridos = (
     tab_concat
-    .groupby("time")["gols_sofridos"]
+    .groupby(["temporada", "time"])["gols_sofridos"]
     .agg("sum")
-    .sort_values(ascending=False)
     .reset_index()
+    .sort_values(by = "temporada", ascending=False)
 )
+
 
 
 # Agora posso agrupar por time e analisar os dados
 tab_pontos = (
     tab_concat
-    .groupby("time")["pontos"]
+    .groupby(["temporada", "time"])["pontos"]
     .agg("sum")
-    .sort_values(ascending=False)
     .reset_index()
+    .sort_values(by = "temporada", ascending=False)
 )
 
 tab_vitorias = (
     tab_concat
     .query("vitorias == 2")
-    .groupby("time")["vitorias"]
+    .groupby(["temporada", "time"])["vitorias"]
     .agg("count")
-    .sort_values(ascending=False)
     .reset_index()
+    .sort_values(by = "temporada", ascending = False)
 )
 
 
 tab_derrotas = (
     tab_concat
     .query("vitorias == 1")
-    .groupby("time")["vitorias"]
+    .groupby(["temporada", "time"])["vitorias"]
     .agg("count")
-    .sort_values(ascending=False)
     .reset_index()
+    .sort_values(by = "temporada", ascending=False)
 )
+
 
 tab_empates = (
     tab_concat
     .query("vitorias == 0")
-    .groupby("time")["vitorias"]
+    .groupby(["temporada", "time"])["vitorias"]
     .agg("count")
-    .sort_values(ascending=False)
     .reset_index()
+    .sort_values(by = "temporada", ascending=False)
 )
 
 
 tab_gols_marcados = (
     tab_concat
-    .groupby("time")["gols_marcados"]
+    .groupby(["temporada", "time"])["gols_marcados"]
     .agg("sum")
-    .sort_values(ascending=False)
     .reset_index()
+    .sort_values(by = "temporada", ascending=False)
 )
 
-#Saldo de gols
 tab_saldo_de_gols = (
-    tab_gols_marcados
-    .merge(tab_gols_sofridos,
-    on = "time",
+    pd.merge(
+        tab_gols_marcados,
+        tab_gols_sofridos,
+        left_on=["temporada", "time"],
+        right_on = ["temporada", "time"]
     )
     .assign(
-        saldo_de_gols = lambda x: x["gols_marcados"] - x["gols_sofridos"])
+        saldo_gols = lambda x: x["gols_marcados"] - x["gols_sofridos"]
+    )
 )
 
 tab_jogos = (
     tab_concat
-    .groupby("time")["pontos"]
+    .groupby(["temporada", "time"])["pontos"]
     .agg("count")
     .reset_index()
 )
 
 
 classificacao = (
-    tab_pontos
-    .merge(tab_jogos, on = "time")
-    .merge(tab_vitorias, on = "time")
-    .merge(tab_empates, on = "time")
-    .merge(tab_derrotas, on = "time")
-    .merge(tab_saldo_de_gols, on = "time")
+    pd.merge(
+        tab_pontos, 
+        tab_jogos,
+        left_on = ["temporada", "time"],
+        right_on = ["temporada", "time"]
+    )
+    .merge(tab_vitorias, on = ["temporada", "time"])
+    .merge(tab_empates, on = ["temporada", "time"])
+    .merge(tab_derrotas, on = ["temporada", "time"])
+    .merge(tab_saldo_de_gols, on = ["temporada", "time"])
+    .sort_values(["temporada", "pontos_x"], ascending=False)
 )
 
+
 classificacao.columns = [
-    "clube", "pts", "pj", 
-    "vit", "emp","der",
-    "gm","gc","sg"
+    "temporada", "clube", "pts", "pj", 
+    "vit", "emp","der","gm","gc","sg"
 ]
 
-print(classificacao)
+
+for ano in classificacao.temporada.unique():
+    tab = (
+        classificacao
+        .query("temporada == @ano")
+        .filter(["clube",
+                "pts", "pj", "vit", "emp", 
+                "der","gm", "gc", "sg"])
+    )
+    print("classificação do Brasileirão temporada", ano)
+    print("\n", tab)
+    print(65*"-")
